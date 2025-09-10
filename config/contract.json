@@ -3,7 +3,7 @@
   "chainId": 11155111,
   "contractAddress": "0xc46A915D0A4d17452561D0c6ACA9CC856c6308d1",
   "etherscanUrl": "https://sepolia.etherscan.io/address/0xc46A915D0A4d17452561D0c6ACA9CC856c6308d1",
-  "ownerAddress": "",
+  "ownerAddress": "0xYOUR_WALLET_ADDRESS",
   "meta": {
     "version": "",
     "uiURL": "",
