@@ -1,1 +1,1 @@
-[]
+[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"meta","outputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"string","name":"uiURL","type":"string"},{"internalType":"string","name":"version","type":"string"},{"internalType":"uint256","name":"deployedAt","type":"uint256"}],"stateMutability":"view","type":"function"}]
