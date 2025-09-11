@@ -80,7 +80,6 @@
       }
 
       async function loadConfig() {
-        // Load config & abi; fallback to DEFAULTS if config missing
         try {
           cfg = await loadJSON("./docs/config/contract.json");
         } catch (e) {
@@ -99,11 +98,9 @@
       }
 
       async function ensureWallet() {
-        if (!window.ethereum) {
-          throw new Error("MetaMask not found. Please install MetaMask.");
-        }
+        if (!window.ethereum) throw new Error("MetaMask not found. Please install MetaMask.");
         provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await provider.send("eth_requestAccounts", []);
+        await provider.send("eth_requestAccounts", []);
         signer = await provider.getSigner();
         const addr = await signer.getAddress();
         const net = await provider.getNetwork();
@@ -128,26 +125,23 @@
         try {
           const owner = await contract.owner().catch(() => "n/a");
           ownerValEl.textContent = owner ?? "n/a";
-        } catch (e) {
+        } catch {
           ownerValEl.textContent = "error";
         }
         try {
-          // meta() is optional; handle gracefully
           const m = await contract.meta?.();
           if (m === undefined) {
             metaValEl.textContent = "(meta() not implemented)";
           } else {
-            // If meta() returns a struct or JSON string, display compactly
             let out = m;
             if (typeof m === "object") out = JSON.stringify(m);
             metaValEl.textContent = out;
           }
-        } catch (e) {
+        } catch {
           metaValEl.textContent = "(meta() call failed)";
         }
       }
 
-      // Wire up
       btnConnect.addEventListener("click", async () => {
         try {
           logStatus("loading config…");
@@ -173,10 +167,8 @@
         }
       });
 
-      // Initial config load (so the Etherscan link shows even before connect)
       loadConfig().catch(e => logStatus(e.message || String(e)));
     })();
   </script>
 </body>
 </html>
-
