@@ -24,8 +24,8 @@
   <div class="card">
     <div class="row"><span class="label">Network required:</span><span>Sepolia <code>(chainId 11155111)</code></span></div>
     <div class="row"><span class="label">Contract address:</span><span id="contractLink">—</span></div>
-    <div class="row"><span class="label">ABI source:</span><span class="muted"><code>docs/config/abi.json</code></span></div>
-    <div class="row"><span class="label">Config:</span><span class="muted"><code>docs/config/contract.json</code></span></div>
+    <div class="row"><span class="label">ABI source:</span><span class="muted"><code>./config/abi.json</code></span></div>
+    <div class="row"><span class="label">Config:</span><span class="muted"><code>./config/contract.json</code></span></div>
     <button id="btnConnect">Connect MetaMask</button>
     <div id="status" class="muted">Status: idle</div>
   </div>
@@ -42,230 +42,98 @@
     <button id="btnRefresh">Refresh Reads</button>
   </div>
 
-  <!-- Ethers v6 UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
-  <script>
-    (function () {
-      const REQUIRED_CHAIN_ID = 11155111; // Sepolia
-      const DEFAULTS = {
-        network: "sepolia",
-        chainId: REQUIRED_CHAIN_ID,
-        contractAddress: "0xc46A915D0A4d17452561D0c6ACA9CC856c6308d1",
-        etherscanBase: "https://sepolia.etherscan.io"
-      };
-
-      // Elements
-      const $ = (id) => document.getElementById(id);
-      const statusEl = $("status");
-      const btnConnect = $("btnConnect");
-      const btnRefresh = $("btnRefresh");
-      const walletCard = $("walletCard");
-      const contractCard = $("contractCard");
-      const walletAddrEl = $("walletAddr");
-      const chainInfoEl = $("chainInfo");
-      const ownerValEl = $("ownerVal");
-      const metaValEl = $("metaVal");
-      const contractLinkEl = $("contractLink");
-
-      let provider, signer, contract, cfg = null, abi = null;
-
-      function logStatus(msg) {
-        statusEl.textContent = `Status: ${msg}`;
-      }
-
-      async function loadJSON(path) {
-        const res = await fetch(path, { cache: "no-store" });
-        if (!res.ok) throw new Error(`Failed to load ${path} (${res.status})`);
-        return res.json();
-      }
-
-      async function loadConfig() {
-        try {
-          cfg = await loadJSON("./docs/config/contract.json");
-        } catch (e) {
-          cfg = DEFAULTS;
-        }
-        try {
-          abi = await loadJSON("./docs/config/abi.json");
-        } catch (e) {
-          throw new Error("ABI missing: please place abi.json at docs/config/abi.json");
-        }
-
-        const addr = (cfg.contractAddress || DEFAULTS.contractAddress);
-        const base = (cfg.etherscanBase || DEFAULTS.etherscanBase);
-        contractLinkEl.innerHTML =
-          `<a target="_blank" rel="noopener" href="${base}/address/${addr}">${addr}</a>`;
-      }
-
-      async function ensureWallet() {
-        if (!window.ethereum) throw new Error("MetaMask not found. Please install MetaMask.");
-        provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = await provider.getSigner();
-        const addr = await signer.getAddress();
-        const net = await provider.getNetwork();
-        walletCard.style.display = "block";
-        walletAddrEl.textContent = addr;
-        chainInfoEl.textContent = `${net.name} (${Number(net.chainId)})`;
-        if (Number(net.chainId) !== REQUIRED_CHAIN_ID) {
-          throw new Error(`Wrong network: please switch to Sepolia (11155111).`);
-        }
-      }
-
-      function buildContract() {
-        const addr = (cfg.contractAddress || DEFAULTS.contractAddress);
-        contract = new ethers.Contract(addr, abi, signer ?? provider);
-        contractCard.style.display = "block";
-      }
-
-      async function refreshReads() {
-        if (!contract) return;
-        ownerValEl.textContent = "…";
-        metaValEl.textContent = "…";
-        try {
-          const owner = await contract.owner().catch(() => "n/a");
-          ownerValEl.textContent = owner ?? "n/a";
-        } catch {
-          ownerValEl.textContent = "error";
-        }
-        try {
-          const m = await contract.meta?.();
-          if (m === undefined) {
-            metaValEl.textContent = "(meta() not implemented)";
-          } else {
-            let out = m;
-            if (typeof m === "object") out = JSON.stringify(m);
-            metaValEl.textContent = out;
-          }
-        } catch {
-          metaValEl.textContent = "(meta() call failed)";
-        }
-      }
-
-      btnConnect.addEventListener("click", async () => {
-        try {
-          logStatus("loading config…");
-          await loadConfig();
-          logStatus("connecting wallet…");
-          await ensureWallet();
-          logStatus("building contract…");
-          buildContract();
-          logStatus("connected ✔");
-          await refreshReads();
-        } catch (e) {
-          logStatus(e.message || String(e));
-        }
-      });
-
-      btnRefresh.addEventListener("click", async () => {
-        try {
-          logStatus("refreshing reads…");
-          await refreshReads();
-          logStatus("ready");
-        } catch (e) {
-          logStatus(e.message || String(e));
-        }
-      });
-
-      loadConfig().catch(e => logStatus(e.message || String(e)));
-    })();
-  </script>
+  <!-- Ethers v5 UMD -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<script>
-(async function () {
-  const UI = {
-    addrEl: document.getElementById('contractAddress') || null,
-    statusEl: document.getElementById('status') || null,
-    connectBtn: document.getElementById('connectBtn') || document.querySelector('button')
-  };
+  <script>
+  (async function () {
+    const UI = {
+      addrEl: document.getElementById('contractAddress') || null,
+      statusEl: document.getElementById('status') || null,
+      connectBtn: document.getElementById('connectBtn') || document.querySelector('button')
+    };
 
-  // ---- Load config + ABI from /config (not /docs/config) ----
-  async function loadJson(path) {
-    const r = await fetch(path, { cache: 'no-store' });
-    if (!r.ok) throw new Error(`Fetch failed: ${path}`);
-    return r.json();
-  }
-
-  let config, abi;
-  try {
-    [config, abi] = await Promise.all([
-      loadJson('./config/contract.json'),
-      loadJson('./config/abi.json')
-    ]);
-    if (UI.addrEl) UI.addrEl.textContent = config.contractAddress || '—';
-    setStatus('Ready: config/ABI loaded.');
-  } catch (e) {
-    setStatus('ABI or config missing: place files at ./config/abi.json and ./config/contract.json');
-    console.error(e);
-    return; // stop here until files are in place
-  }
-
-  // ---- Chain guard: require Sepolia (11155111) ----
-  const REQUIRED_CHAIN_ID_DEC = 11155111;
-  const REQUIRED_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia
-
-  async function ensureSepolia(ethereum) {
-    const hex = await ethereum.request({ method: 'eth_chainId' });
-    const current = parseInt(hex, 16);
-    if (current === REQUIRED_CHAIN_ID_DEC) return true;
-
-    setStatus(`Wrong network (${hex}). Switching to Sepolia…`);
-    try {
-      await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: REQUIRED_CHAIN_ID_HEX }] });
-      return true;
-    } catch (err) {
-      // If not added, try to add
-      if (err?.code === 4902) {
-        await ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: REQUIRED_CHAIN_ID_HEX,
-            chainName: 'Sepolia',
-            nativeCurrency: { name: 'Sepolia ETH', symbol: 'SepoliaETH', decimals: 18 },
-            rpcUrls: ['https://sepolia.drpc.org', 'https://rpc2.sepolia.org'],
-            blockExplorerUrls: ['https://sepolia.etherscan.io']
-          }]
-        });
-        return true;
-      }
-      setStatus('Please switch MetaMask to Sepolia (chainId 11155111) and reload.');
-      throw err;
+    async function loadJson(path) {
+      const r = await fetch(path, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`Fetch failed: ${path}`);
+      return r.json();
     }
-  }
 
-  // ---- Connect flow ----
-  if (UI.connectBtn) {
-    UI.connectBtn.id = 'connectBtn';
-    UI.connectBtn.addEventListener('click', connect);
-  }
-
-  async function connect() {
-    const { ethereum } = window;
-    if (!ethereum) return setStatus('MetaMask not found.');
+    let config, abi;
     try {
-      await ethereum.request({ method: 'eth_requestAccounts' });
-      const ok = await ensureSepolia(ethereum);
-      if (!ok) return;
-
-      const provider = new ethers.providers.Web3Provider(ethereum);
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(config.contractAddress, abi, signer);
-
-      setStatus('Connected on Sepolia ✔ You can proceed with owner checks & read panel (Steps 7–9).');
-      // TODO next steps: owner gate, read panel, writes…
-      window.__resume = { provider, signer, contract, config };
+      [config, abi] = await Promise.all([
+        loadJson('./config/contract.json'),
+        loadJson('./config/abi.json')
+      ]);
+      if (UI.addrEl) UI.addrEl.textContent = config.contractAddress || '—';
+      setStatus('Ready: config/ABI loaded.');
     } catch (e) {
+      setStatus('ABI or config missing: place files at ./config/abi.json and ./config/contract.json');
       console.error(e);
-      setStatus('Connection failed or denied. See console for details.');
+      return;
     }
-  }
 
-  function setStatus(msg) {
-    if (UI.statusEl) UI.statusEl.textContent = msg;
-    else console.log('[ADMIN STATUS]', msg);
-  }
-})();
-</script>
+    const REQUIRED_CHAIN_ID_DEC = 11155111;
+    const REQUIRED_CHAIN_ID_HEX = '0xaa36a7';
+
+    async function ensureSepolia(ethereum) {
+      const hex = await ethereum.request({ method: 'eth_chainId' });
+      const current = parseInt(hex, 16);
+      if (current === REQUIRED_CHAIN_ID_DEC) return true;
+
+      setStatus(`Wrong network (${hex}). Switching to Sepolia…`);
+      try {
+        await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: REQUIRED_CHAIN_ID_HEX }] });
+        return true;
+      } catch (err) {
+        if (err?.code === 4902) {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: REQUIRED_CHAIN_ID_HEX,
+              chainName: 'Sepolia',
+              nativeCurrency: { name: 'Sepolia ETH', symbol: 'SepoliaETH', decimals: 18 },
+              rpcUrls: ['https://sepolia.drpc.org', 'https://rpc2.sepolia.org'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io']
+            }]
+          });
+          return true;
+        }
+        setStatus('Please switch MetaMask to Sepolia (chainId 11155111) and reload.');
+        throw err;
+      }
+    }
+
+    if (UI.connectBtn) {
+      UI.connectBtn.id = 'connectBtn';
+      UI.connectBtn.addEventListener('click', connect);
+    }
+
+    async function connect() {
+      const { ethereum } = window;
+      if (!ethereum) return setStatus('MetaMask not found.');
+      try {
+        await ethereum.request({ method: 'eth_requestAccounts' });
+        const ok = await ensureSepolia(ethereum);
+        if (!ok) return;
+
+        const provider = new ethers.providers.Web3Provider(ethereum);
+        const signer = provider.getSigner();
+        const contract = new ethers.Contract(config.contractAddress, abi, signer);
+
+        setStatus('Connected on Sepolia ✔ You can proceed with owner checks & read panel (Steps 7–9).');
+        window.__resume = { provider, signer, contract, config };
+      } catch (e) {
+        console.error(e);
+        setStatus('Connection failed or denied. See console for details.');
+      }
+    }
+
+    function setStatus(msg) {
+      if (UI.statusEl) UI.statusEl.textContent = msg;
+      else console.log('[ADMIN STATUS]', msg);
+    }
+  })();
+  </script>
 
 </body>
 </html>
