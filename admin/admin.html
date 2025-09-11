@@ -8,39 +8,175 @@
     body { font-family: Arial, sans-serif; padding: 20px; }
     h1 { font-size: 1.5em; margin-bottom: 1em; }
     button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
-    .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; }
+    .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 10px; }
     .label { font-weight: bold; }
-    #status { margin-top: 10px; }
+    #status { margin-top: 10px; white-space: pre-line; }
+    .row { display: grid; grid-template-columns: 180px 1fr; gap: 10px; align-items: center; }
+    .muted { color: #666; font-size: 0.95em; }
+    code { background: #f5f5f5; padding: 2px 6px; border-radius: 6px; }
+    a { color: #0a58ca; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <h1>Writable Résumé Admin</h1>
 
-  <!-- Connect Wallet -->
   <div class="card">
-    <button id="connectBtn">Connect Wallet</button>
-    <div id="status">Not connected</div>
+    <div class="row"><span class="label">Network required:</span><span>Sepolia <code>(chainId 11155111)</code></span></div>
+    <div class="row"><span class="label">Contract address:</span><span id="contractLink">—</span></div>
+    <div class="row"><span class="label">ABI source:</span><span class="muted"><code>docs/config/abi.json</code></span></div>
+    <div class="row"><span class="label">Config:</span><span class="muted"><code>docs/config/contract.json</code></span></div>
+    <button id="btnConnect">Connect MetaMask</button>
+    <div id="status" class="muted">Status: idle</div>
   </div>
 
-  <!-- Account / Network -->
-  <div class="card">
-    <div><span class="label">Account:</span> <span id="acct">—</span></div>
-    <div><span class="label">Chain ID:</span> <span id="chainId">—</span></div>
-    <div><span class="label">Network:</span> <span id="netName">—</span></div>
-    <div><span class="label">Mode:</span> <span id="modeText">—</span>
-      <span id="modeBadge"></span>
-    </div>
+  <div class="card" id="walletCard" style="display:none">
+    <div class="row"><span class="label">Wallet:</span><span id="walletAddr">—</span></div>
+    <div class="row"><span class="label">Chain:</span><span id="chainInfo">—</span></div>
   </div>
 
-  <!-- Contract / Meta -->
-  <div class="card" id="metaCard">
-    <div><span class="label">Etherscan:</span> <a id="etherscanLink" href="#" target="_blank">—</a></div>
-    <div><span class="label">Version:</span> <span id="mVersion">—</span></div>
-    <div><span class="label">UI URL:</span> <span id="mUiURL">—</span></div>
-    <div><span class="label">Deployed At:</span> <span id="mDeployedAt">—</span></div>
+  <div class="card" id="contractCard" style="display:none">
+    <h2 style="margin-top:0">Contract (read)</h2>
+    <div class="row"><span class="label">owner():</span><span id="ownerVal">—</span></div>
+    <div class="row"><span class="label">meta():</span><span id="metaVal" class="muted">—</span></div>
+    <button id="btnRefresh">Refresh Reads</button>
   </div>
 
-  <!-- Scripts -->
-  <script type="module" src="scripts/app.js"></script>
+  <!-- Ethers v6 UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  <script>
+    (function () {
+      const REQUIRED_CHAIN_ID = 11155111; // Sepolia
+      const DEFAULTS = {
+        network: "sepolia",
+        chainId: REQUIRED_CHAIN_ID,
+        contractAddress: "0xc46A915D0A4d17452561D0c6ACA9CC856c6308d1",
+        etherscanBase: "https://sepolia.etherscan.io"
+      };
+
+      // Elements
+      const $ = (id) => document.getElementById(id);
+      const statusEl = $("status");
+      const btnConnect = $("btnConnect");
+      const btnRefresh = $("btnRefresh");
+      const walletCard = $("walletCard");
+      const contractCard = $("contractCard");
+      const walletAddrEl = $("walletAddr");
+      const chainInfoEl = $("chainInfo");
+      const ownerValEl = $("ownerVal");
+      const metaValEl = $("metaVal");
+      const contractLinkEl = $("contractLink");
+
+      let provider, signer, contract, cfg = null, abi = null;
+
+      function logStatus(msg) {
+        statusEl.textContent = `Status: ${msg}`;
+      }
+
+      async function loadJSON(path) {
+        const res = await fetch(path, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed to load ${path} (${res.status})`);
+        return res.json();
+      }
+
+      async function loadConfig() {
+        // Load config & abi; fallback to DEFAULTS if config missing
+        try {
+          cfg = await loadJSON("./docs/config/contract.json");
+        } catch (e) {
+          cfg = DEFAULTS;
+        }
+        try {
+          abi = await loadJSON("./docs/config/abi.json");
+        } catch (e) {
+          throw new Error("ABI missing: please place abi.json at docs/config/abi.json");
+        }
+
+        const addr = (cfg.contractAddress || DEFAULTS.contractAddress);
+        const base = (cfg.etherscanBase || DEFAULTS.etherscanBase);
+        contractLinkEl.innerHTML =
+          `<a target="_blank" rel="noopener" href="${base}/address/${addr}">${addr}</a>`;
+      }
+
+      async function ensureWallet() {
+        if (!window.ethereum) {
+          throw new Error("MetaMask not found. Please install MetaMask.");
+        }
+        provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+        const addr = await signer.getAddress();
+        const net = await provider.getNetwork();
+        walletCard.style.display = "block";
+        walletAddrEl.textContent = addr;
+        chainInfoEl.textContent = `${net.name} (${Number(net.chainId)})`;
+        if (Number(net.chainId) !== REQUIRED_CHAIN_ID) {
+          throw new Error(`Wrong network: please switch to Sepolia (11155111).`);
+        }
+      }
+
+      function buildContract() {
+        const addr = (cfg.contractAddress || DEFAULTS.contractAddress);
+        contract = new ethers.Contract(addr, abi, signer ?? provider);
+        contractCard.style.display = "block";
+      }
+
+      async function refreshReads() {
+        if (!contract) return;
+        ownerValEl.textContent = "…";
+        metaValEl.textContent = "…";
+        try {
+          const owner = await contract.owner().catch(() => "n/a");
+          ownerValEl.textContent = owner ?? "n/a";
+        } catch (e) {
+          ownerValEl.textContent = "error";
+        }
+        try {
+          // meta() is optional; handle gracefully
+          const m = await contract.meta?.();
+          if (m === undefined) {
+            metaValEl.textContent = "(meta() not implemented)";
+          } else {
+            // If meta() returns a struct or JSON string, display compactly
+            let out = m;
+            if (typeof m === "object") out = JSON.stringify(m);
+            metaValEl.textContent = out;
+          }
+        } catch (e) {
+          metaValEl.textContent = "(meta() call failed)";
+        }
+      }
+
+      // Wire up
+      btnConnect.addEventListener("click", async () => {
+        try {
+          logStatus("loading config…");
+          await loadConfig();
+          logStatus("connecting wallet…");
+          await ensureWallet();
+          logStatus("building contract…");
+          buildContract();
+          logStatus("connected ✔");
+          await refreshReads();
+        } catch (e) {
+          logStatus(e.message || String(e));
+        }
+      });
+
+      btnRefresh.addEventListener("click", async () => {
+        try {
+          logStatus("refreshing reads…");
+          await refreshReads();
+          logStatus("ready");
+        } catch (e) {
+          logStatus(e.message || String(e));
+        }
+      });
+
+      // Initial config load (so the Etherscan link shows even before connect)
+      loadConfig().catch(e => logStatus(e.message || String(e)));
+    })();
+  </script>
 </body>
 </html>
+
