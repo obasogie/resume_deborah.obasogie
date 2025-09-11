@@ -39,7 +39,7 @@ els.connectBtn.addEventListener('click', connectWallet);
 async function connectWallet() {
   try {
     els.status.textContent = 'Connecting wallet…';
-    await provider.send('eth_requestAccounts', []);
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
     signer  = await provider.getSigner();
     account = (await signer.getAddress()).toLowerCase();
     els.acct.textContent = account;
