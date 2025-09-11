@@ -170,5 +170,102 @@
       loadConfig().catch(e => logStatus(e.message || String(e)));
     })();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script>
+(async function () {
+  const UI = {
+    addrEl: document.getElementById('contractAddress') || null,
+    statusEl: document.getElementById('status') || null,
+    connectBtn: document.getElementById('connectBtn') || document.querySelector('button')
+  };
+
+  // ---- Load config + ABI from /config (not /docs/config) ----
+  async function loadJson(path) {
+    const r = await fetch(path, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`Fetch failed: ${path}`);
+    return r.json();
+  }
+
+  let config, abi;
+  try {
+    [config, abi] = await Promise.all([
+      loadJson('./config/contract.json'),
+      loadJson('./config/abi.json')
+    ]);
+    if (UI.addrEl) UI.addrEl.textContent = config.contractAddress || '—';
+    setStatus('Ready: config/ABI loaded.');
+  } catch (e) {
+    setStatus('ABI or config missing: place files at ./config/abi.json and ./config/contract.json');
+    console.error(e);
+    return; // stop here until files are in place
+  }
+
+  // ---- Chain guard: require Sepolia (11155111) ----
+  const REQUIRED_CHAIN_ID_DEC = 11155111;
+  const REQUIRED_CHAIN_ID_HEX = '0xaa36a7'; // Sepolia
+
+  async function ensureSepolia(ethereum) {
+    const hex = await ethereum.request({ method: 'eth_chainId' });
+    const current = parseInt(hex, 16);
+    if (current === REQUIRED_CHAIN_ID_DEC) return true;
+
+    setStatus(`Wrong network (${hex}). Switching to Sepolia…`);
+    try {
+      await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: REQUIRED_CHAIN_ID_HEX }] });
+      return true;
+    } catch (err) {
+      // If not added, try to add
+      if (err?.code === 4902) {
+        await ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: REQUIRED_CHAIN_ID_HEX,
+            chainName: 'Sepolia',
+            nativeCurrency: { name: 'Sepolia ETH', symbol: 'SepoliaETH', decimals: 18 },
+            rpcUrls: ['https://sepolia.drpc.org', 'https://rpc2.sepolia.org'],
+            blockExplorerUrls: ['https://sepolia.etherscan.io']
+          }]
+        });
+        return true;
+      }
+      setStatus('Please switch MetaMask to Sepolia (chainId 11155111) and reload.');
+      throw err;
+    }
+  }
+
+  // ---- Connect flow ----
+  if (UI.connectBtn) {
+    UI.connectBtn.id = 'connectBtn';
+    UI.connectBtn.addEventListener('click', connect);
+  }
+
+  async function connect() {
+    const { ethereum } = window;
+    if (!ethereum) return setStatus('MetaMask not found.');
+    try {
+      await ethereum.request({ method: 'eth_requestAccounts' });
+      const ok = await ensureSepolia(ethereum);
+      if (!ok) return;
+
+      const provider = new ethers.providers.Web3Provider(ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(config.contractAddress, abi, signer);
+
+      setStatus('Connected on Sepolia ✔ You can proceed with owner checks & read panel (Steps 7–9).');
+      // TODO next steps: owner gate, read panel, writes…
+      window.__resume = { provider, signer, contract, config };
+    } catch (e) {
+      console.error(e);
+      setStatus('Connection failed or denied. See console for details.');
+    }
+  }
+
+  function setStatus(msg) {
+    if (UI.statusEl) UI.statusEl.textContent = msg;
+    else console.log('[ADMIN STATUS]', msg);
+  }
+})();
+</script>
+
 </body>
 </html>
