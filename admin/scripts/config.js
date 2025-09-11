@@ -1,7 +1,7 @@
 // config.js — loads frozen config & ABI, and builds ethers objects
 
-export const CONFIG_PATH = '/config/contract.json';
-export const ABI_PATH    = '/config/abi.json';
+export const CONFIG_PATH = '../config/contract.json';
+export const ABI_PATH    = '../config/abi.json';
 
 export async function loadConfigAndAbi() {
   const [config, abi] = await Promise.all([
